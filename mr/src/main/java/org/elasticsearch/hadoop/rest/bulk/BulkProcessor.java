@@ -203,7 +203,7 @@ public class BulkProcessor implements Closeable, StatsAware {
                     	// this will add es.batch.write.retry.count 
                     	debugLog(bulkLoggingID, "Response received");
                     	totalAttempts++;
-                        totalTime += bar.getTimeSpent();
+                        totalTime += 0;
                         retryOperation = true;
                         BulkWriteErrorCollector errorCollector = new BulkWriteErrorCollector();
                         waitTime = errorCollector.getDelayTimeBetweenRetries();
