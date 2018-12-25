@@ -16,6 +16,7 @@ import org.elasticsearch.hadoop.cfg.Settings;
 import org.elasticsearch.hadoop.handler.EsHadoopAbortHandlerException;
 import org.elasticsearch.hadoop.handler.HandlerResult;
 import org.elasticsearch.hadoop.rest.ErrorExtractor;
+import org.elasticsearch.hadoop.rest.EsHadoopTooManyRequests;
 import org.elasticsearch.hadoop.rest.Resource;
 import org.elasticsearch.hadoop.rest.RestClient;
 import org.elasticsearch.hadoop.rest.bulk.handler.BulkWriteErrorCollector;
@@ -193,7 +194,21 @@ public class BulkProcessor implements Closeable, StatsAware {
 
                     // Exec bulk operation to ES, get response.
                     debugLog(bulkLoggingID, "Submitting request");
-                    RestClient.BulkActionResponse bar = restClient.bulk(resource, data);
+                    RestClient.BulkActionResponse bar = null ;
+                    try {
+                    	bar = restClient.bulk(resource, data);
+                    } catch(EsHadoopTooManyRequests e) {
+                    	
+                    	// add 429 exception control for global bulk qps control by a qps limit gateway
+                    	// this will add es.batch.write.retry.count 
+                    	debugLog(bulkLoggingID, "Response received");
+                    	totalAttempts++;
+                        totalTime += bar.getTimeSpent();
+                        retryOperation = true;
+                        BulkWriteErrorCollector errorCollector = new BulkWriteErrorCollector();
+                        waitTime = errorCollector.getDelayTimeBetweenRetries();
+                        continue;
+                    }
                     debugLog(bulkLoggingID, "Response received");
                     totalAttempts++;
                     totalTime += bar.getTimeSpent();
@@ -369,6 +384,7 @@ public class BulkProcessor implements Closeable, StatsAware {
                                 bulkResult = BulkResponse.complete(bar.getResponseCode(), totalTime, totalDocs, docsSent, docsSkipped);
                             }
                         }
+                    	
                     }
                 } while (retryOperation);
 

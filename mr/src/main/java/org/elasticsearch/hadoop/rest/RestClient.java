@@ -417,6 +417,7 @@ public class RestClient implements Closeable, StatsAware {
     }
 
     private void checkResponse(Request request, Response response) {
+    	
         if (response.hasFailed()) {
             // check error first
         	String msg = null;
@@ -439,6 +440,10 @@ public class RestClient implements Closeable, StatsAware {
                         request.path(), response.uri(), response.status(), response.statusDescription(),
                         IOUtils.asStringAlways(response.body()));
             }
+            
+            if (response.status() == HttpStatus.TOO_MANY_REQUESTS) {
+            	throw new EsHadoopTooManyRequests(msg);
+        	}
 
             throw new EsHadoopInvalidRequest(msg);
         }
