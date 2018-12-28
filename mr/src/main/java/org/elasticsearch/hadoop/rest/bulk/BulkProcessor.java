@@ -182,7 +182,7 @@ public class BulkProcessor implements Closeable, StatsAware {
                 do {
                     // Throw to break out of a possible infinite loop, but only if the limit is a positive number
                     if (retryLimit >= 0 && totalAttempts > retryLimit) {
-                        throw new EsHadoopException("Executed too many bulk requests without success. Attempted [" +
+                        throw new EsHadoopException("Executed too many bulk requests without success. waitTime ["+waitTime+"] Attempted [" +
                                 totalAttempts + "] write operations, which exceeds the bulk request retry limit specified" +
                                 "by [" + ConfigurationOptions.ES_BATCH_WRITE_RETRY_LIMIT + "], and found data still " +
                                 "not accepted. Perhaps there is an error handler that is not terminating? Bailing out..."
@@ -198,9 +198,9 @@ public class BulkProcessor implements Closeable, StatsAware {
                     try {
                     	bar = restClient.bulk(resource, data);
                     } catch(EsHadoopTooManyRequests e) {
-                    	
+
                     	// add 429 exception control for global bulk qps control by a qps limit gateway
-                    	// this will add es.batch.write.retry.count 
+                    	// this will add es.batch.write.retry.count
                     	debugLog(bulkLoggingID, "Response received");
                     	totalAttempts++;
                         totalTime += 0;
@@ -384,7 +384,7 @@ public class BulkProcessor implements Closeable, StatsAware {
                                 bulkResult = BulkResponse.complete(bar.getResponseCode(), totalTime, totalDocs, docsSent, docsSkipped);
                             }
                         }
-                    	
+
                     }
                 } while (retryOperation);
 
@@ -535,7 +535,7 @@ public class BulkProcessor implements Closeable, StatsAware {
             throw new EsHadoopException(message.toString());
         }
     }
-    
+
     private void appendError(StringBuilder message, Throwable exception) {
     	if(exception != null) {
     		message.append(exception);
