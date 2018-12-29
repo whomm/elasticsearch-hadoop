@@ -174,12 +174,15 @@ public class BulkProcessor implements Closeable, StatsAware {
                 int docsAborted = 0;
                 long totalTime = 0L;
                 boolean retryOperation = false;
+                boolean needretry429  = false;
                 int totalAttempts = 0;
                 long waitTime = 0L;
                 List<BulkAttempt> retries = new ArrayList<BulkAttempt>();
                 List<BulkResponse.BulkError> abortErrors = new ArrayList<BulkResponse.BulkError>();
 
                 do {
+
+                    needretry429 = false;
                     // Throw to break out of a possible infinite loop, but only if the limit is a positive number
                     if (retryLimit >= 0 && totalAttempts > retryLimit) {
                         throw new EsHadoopException("Executed too many bulk requests without success. waitTime ["+waitTime+"] Attempted [" +
@@ -190,7 +193,7 @@ public class BulkProcessor implements Closeable, StatsAware {
                     }
 
                     // Log messages, and if wait time is set, perform the thread sleep.
-                    initFlushOperation(bulkLoggingID, retryOperation, retries.size(), waitTime);
+                    initFlushOperation(bulkLoggingID, retryOperation  , retries.size(), waitTime);
 
                     // Exec bulk operation to ES, get response.
                     debugLog(bulkLoggingID, "Submitting request");
@@ -201,12 +204,19 @@ public class BulkProcessor implements Closeable, StatsAware {
 
                     	// add 429 exception control for global bulk qps control by a qps limit gateway
                     	// this will add es.batch.write.retry.count
-                    	debugLog(bulkLoggingID, "Response received");
+                    	debugLog(bulkLoggingID, "Response received 429");
                     	totalAttempts++;
-                        totalTime += 0;
-                        retryOperation = true;
-                        BulkWriteErrorCollector errorCollector = new BulkWriteErrorCollector();
-                        waitTime = errorCollector.getDelayTimeBetweenRetries();
+                        needretry429 = true;
+                        
+                        
+                        try {
+                        	
+                            Thread.sleep(this.settings.getBatchWriteRetryWait());
+                        } catch (InterruptedException e2) {
+                            debugLog(bulkLoggingID, "Thread interrupted - giving up on retrying...");
+                            throw new EsHadoopException("Thread interrupted - giving up on retrying...", e2);
+                        }
+
                         continue;
                     }
                     debugLog(bulkLoggingID, "Response received");
@@ -386,7 +396,7 @@ public class BulkProcessor implements Closeable, StatsAware {
                         }
 
                     }
-                } while (retryOperation);
+                } while (retryOperation || needretry429);
 
                 debugLog(bulkLoggingID, "Completed. [%d] Original Entries. [%d] Attempts. [%d/%d] Docs Sent. [%d/%d] Docs Skipped. [%d/%d] Docs Aborted.",
                         totalDocs,
